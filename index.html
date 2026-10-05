@@ -3,190 +3,1012 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Agents SDK Web</title>
+        <title>Skate Router</title>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
         <style>
+            :root {
+                --ink: #1d2433;
+                --muted: #667085;
+                --line: #e4e7ec;
+                --bg: #f7f8fa;
+                --panel: #ffffff;
+                --accent: #2563eb;
+                --flat: #16a34a;
+                --moderate: #f59e0b;
+                --over: #dc2626;
+                --over-up: #7c3aed;
+                --nodata: #98a2b3;
+            }
             * {
                 box-sizing: border-box;
                 margin: 0;
                 padding: 0;
             }
+            html,
             body {
-                font-family: system-ui, sans-serif;
-                height: 100vh;
+                height: 100%;
+            }
+            body {
+                font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+                color: var(--ink);
+                background: var(--bg);
                 display: flex;
-                justify-content: center;
+                flex-direction: column;
+            }
+
+            /* --- Header --- */
+            header {
+                padding: 14px 20px;
+                background: var(--panel);
+                border-bottom: 1px solid var(--line);
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px 24px;
                 align-items: center;
-                padding: 3rem 1rem;
             }
-            #container {
-                width: 100%;
-                max-width: 900px;
+            .brand h1 {
+                font-size: 1.2rem;
+                letter-spacing: -0.01em;
+            }
+            .brand p {
+                font-size: 0.85rem;
+                color: var(--muted);
+                max-width: 560px;
+                line-height: 1.4;
+            }
+            .examples {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                flex: 1;
+                justify-content: flex-end;
+            }
+            .examples button {
+                font: inherit;
+                font-size: 0.8rem;
+                padding: 6px 10px;
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                background: var(--bg);
+                color: var(--ink);
+                cursor: pointer;
+                text-align: left;
+            }
+            .examples button:hover {
+                border-color: var(--accent);
+                color: var(--accent);
+            }
+
+            /* --- Layout: chat left, map right; stacked on narrow screens --- */
+            main {
+                flex: 1;
+                min-height: 0;
+                display: grid;
+                grid-template-columns: minmax(340px, 460px) 1fr;
+            }
+            #chat {
                 display: flex;
                 flex-direction: column;
-                border: 1px solid #e0e0e0;
+                min-height: 0;
+                background: var(--panel);
+                border-right: 1px solid var(--line);
             }
+            #map-wrap {
+                position: relative;
+                min-height: 0;
+            }
+            #map {
+                position: absolute;
+                inset: 0;
+            }
+            /* Mute the basemap so only the route carries color (OSM draws avenues orange). */
+            #map .leaflet-tile-pane {
+                filter: grayscale(1) brightness(1.04) contrast(0.92);
+            }
+            @media (max-width: 800px) {
+                main {
+                    grid-template-columns: 1fr;
+                    grid-template-rows: 42vh 1fr;
+                }
+                #map-wrap {
+                    order: -1;
+                }
+                #chat {
+                    border-right: none;
+                    border-top: 1px solid var(--line);
+                }
+                /* Keep the header short so the map and chat get the screen. */
+                header {
+                    padding: 10px 12px;
+                }
+                .brand p {
+                    display: none;
+                }
+                .examples {
+                    flex: 0 0 100%; /* own row under the title, scrolls sideways */
+                    flex-wrap: nowrap;
+                    overflow-x: auto;
+                    justify-content: flex-start;
+                }
+                .examples button {
+                    flex: none;
+                    white-space: nowrap;
+                }
+            }
+
+            /* --- Messages --- */
             #messages {
+                flex: 1;
                 overflow-y: auto;
-                padding: 2rem;
+                padding: 16px;
                 display: flex;
                 flex-direction: column;
-                gap: 1.5rem;
-                min-height: 450px;
-                max-height: 70vh;
+                gap: 14px;
             }
             .msg {
                 line-height: 1.5;
-                max-width: 80%;
+                font-size: 0.92rem;
             }
             .msg.user {
                 align-self: flex-end;
-                text-align: right;
+                max-width: 85%;
+                background: var(--accent);
+                color: #fff;
+                padding: 8px 12px;
+                border-radius: 14px 14px 4px 14px;
             }
-            .msg .role {
-                font-size: 0.75rem;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                color: #999;
-                margin-bottom: 0.25rem;
+            .msg.assistant .content > * + * {
+                margin-top: 0.5em;
+            }
+            .msg.assistant .content h1,
+            .msg.assistant .content h2,
+            .msg.assistant .content h3 {
+                font-size: 0.98rem;
+                margin-top: 0.9em;
+            }
+            .msg.assistant .content ul,
+            .msg.assistant .content ol {
+                padding-left: 1.2em;
+            }
+            .msg.assistant .content hr {
+                border: none;
+                border-top: 1px solid var(--line);
             }
             .msg.loading .content {
-                color: #999;
+                color: var(--muted);
+                font-style: italic;
             }
+            .welcome {
+                color: var(--muted);
+                font-size: 0.88rem;
+                line-height: 1.5;
+            }
+            .welcome strong {
+                color: var(--ink);
+            }
+
+            /* Route chips under a reply */
+            .routes {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 10px;
+            }
+            .chip {
+                font: inherit;
+                font-size: 0.78rem;
+                text-align: left;
+                padding: 6px 9px;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--bg);
+                cursor: pointer;
+                line-height: 1.35;
+            }
+            .chip.active {
+                border-color: var(--accent);
+                box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+                background: #fff;
+            }
+            .chip .badge {
+                display: inline-block;
+                font-size: 0.7rem;
+                padding: 0 6px;
+                border-radius: 999px;
+                margin-left: 4px;
+                color: #fff;
+            }
+            .badge.yes {
+                background: var(--flat);
+            }
+            .badge.no {
+                background: var(--over);
+            }
+            .badge.unknown {
+                background: var(--nodata);
+            }
+
+            /* Collapsible panels: tool calls and cue sheet */
+            details {
+                margin-top: 8px;
+                font-size: 0.8rem;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                background: var(--bg);
+            }
+            summary {
+                cursor: pointer;
+                padding: 6px 10px;
+                color: var(--muted);
+                user-select: none;
+            }
+            .tool {
+                border-top: 1px solid var(--line);
+                padding: 8px 10px;
+            }
+            .tool .head {
+                display: flex;
+                gap: 6px;
+                align-items: baseline;
+            }
+            .tool .name {
+                font-family: ui-monospace, monospace;
+                font-weight: 600;
+            }
+            .tool .what {
+                color: var(--muted);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .tool .outcome {
+                margin: 2px 0 0 22px;
+            }
+            .tool.running .outcome {
+                color: var(--muted);
+                font-style: italic;
+            }
+            .tool details.raw {
+                margin: 4px 0 0 22px;
+                background: #fff;
+            }
+            .tool pre {
+                font-family: ui-monospace, monospace;
+                font-size: 0.72rem;
+                white-space: pre-wrap;
+                word-break: break-word;
+                background: #fff;
+                border: 1px solid var(--line);
+                border-radius: 6px;
+                padding: 6px 8px;
+                margin-top: 4px;
+                max-height: 220px;
+                overflow: auto;
+            }
+            .tool .label {
+                color: var(--muted);
+                margin-top: 6px;
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .spots {
+                margin-top: 8px;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            .spots-title {
+                font-size: 0.72rem;
+                color: var(--muted);
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+            .spot {
+                font: inherit;
+                font-size: 0.8rem;
+                text-align: left;
+                display: flex;
+                gap: 6px;
+                align-items: baseline;
+                padding: 5px 8px;
+                border-radius: 6px;
+                border: 1px solid var(--line);
+                border-left: 4px solid var(--over);
+                background: #fff;
+                cursor: pointer;
+            }
+            .spot.up {
+                border-left-color: var(--over-up);
+            }
+            .spot .icon {
+                font-size: 0.85rem;
+            }
+            .spot.down .icon {
+                color: var(--over);
+            }
+            .spot.up .icon {
+                color: var(--over-up);
+            }
+            .slope-arrow {
+                background: none;
+                border: none;
+            }
+            .cue ol {
+                padding: 6px 10px 10px 30px;
+                line-height: 1.5;
+            }
+            .cue .mi {
+                color: var(--muted);
+            }
+
+            /* Input */
             #input-area {
                 display: flex;
-                gap: 1rem;
-                padding: 1.5rem;
-                border-top: 1px solid #e0e0e0;
+                gap: 8px;
+                padding: 12px;
+                border-top: 1px solid var(--line);
             }
             #user-input {
                 flex: 1;
-                padding: 0.75rem 0;
-                border: none;
-                border-bottom: 1px solid #e0e0e0;
-                font-size: 1rem;
+                font: inherit;
+                font-size: 0.92rem;
+                padding: 10px 12px;
+                border: 1px solid var(--line);
+                border-radius: 10px;
                 outline: none;
+                resize: none;
             }
             #user-input:focus {
-                border-bottom-color: #000;
+                border-color: var(--accent);
             }
-            button {
-                padding: 0.75rem 1.5rem;
-                background: #000;
-                color: #fff;
+            #input-area button {
+                font: inherit;
+                font-size: 0.85rem;
+                padding: 0 14px;
                 border: none;
-                font-size: 0.75rem;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
+                border-radius: 10px;
                 cursor: pointer;
             }
-            .tool {
-                font-family: ui-monospace, monospace;
+            #send-btn {
+                background: var(--accent);
+                color: #fff;
+            }
+            #clear-btn {
+                background: var(--bg);
+                color: var(--muted);
+                border: 1px solid var(--line) !important;
+            }
+            #input-area button:disabled {
+                opacity: 0.4;
+                cursor: default;
+            }
+
+            /* Map legend */
+            .legend {
+                position: absolute;
+                right: 10px;
+                bottom: 24px;
+                z-index: 500;
+                background: rgba(255, 255, 255, 0.95);
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                padding: 8px 10px;
                 font-size: 0.75rem;
-                color: #555;
-                background: #f5f5f5;
-                border-left: 3px solid #f59e0b;
-                padding: 0.5rem 0.75rem;
-                margin: 0.25rem 0 0.75rem;
-                white-space: pre-wrap;
-                word-break: break-word;
+                line-height: 1.6;
             }
-            .tool .label {
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                color: #b45309;
+            .legend summary {
+                padding: 0;
+                font-weight: 600;
+                color: var(--ink);
             }
-            button:disabled {
-                opacity: 0.3;
+            .legend[open] summary {
+                margin-bottom: 2px;
+            }
+            .legend .row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .legend svg {
+                flex: none;
+            }
+            .legend .title {
+                font-weight: 600;
+                margin-top: 4px;
+            }
+            .legend .title:first-child {
+                margin-top: 0;
+            }
+            /* Sparkle trail: drawn on a canvas above everything that ignores the mouse. */
+            #sparkles {
+                position: fixed;
+                inset: 0;
+                pointer-events: none;
+                z-index: 9999;
+            }
+            #sparkle-toggle {
+                font: inherit;
+                font-size: 0.85rem;
+                padding: 4px 8px;
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                background: var(--bg);
+                cursor: pointer;
+                opacity: 0.9;
+            }
+            #sparkle-toggle[aria-pressed="false"] {
+                filter: grayscale(1);
+                opacity: 0.5;
+            }
+            #map-empty {
+                position: absolute;
+                top: 12px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 500;
+                background: rgba(255, 255, 255, 0.95);
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                padding: 6px 14px;
+                font-size: 0.8rem;
+                color: var(--muted);
+                white-space: nowrap;
             }
         </style>
     </head>
     <body>
-        <div id="container">
-            <div id="messages"></div>
-            <div id="input-area">
-                <input
-                    type="text"
-                    id="user-input"
-                    placeholder="Type a message..."
-                    autocomplete="off"
-                />
-                <button id="send-btn">Send</button>
+        <header>
+            <div class="brand">
+                <h1>🛼 Skate Router <button id="sparkle-toggle" aria-pressed="true" title="Sparkle trail on/off">✨</button></h1>
+                <p>
+                    Rollerblading routes in Manhattan that avoid steep hills and stick to protected bike lanes.
+                    Every stretch is graded with the city's LiDAR survey and checked against NYC DOT's bike map.
+                </p>
             </div>
-        </div>
+            <div class="examples">
+                <button data-prompt="Suggest some 5-mile routes in Manhattan for rollerblading that are good for a beginner. Exclude anything along the West Side Highway, as I already skate that often.">
+                    5-mile beginner routes, not the West Side Highway
+                </button>
+                <button data-prompt="Is there a rollerblade-friendly route or section of Central Park? I know you're only allowed to skate in one direction.">
+                    Is Central Park skate-friendly?
+                </button>
+                <button data-prompt="I'm skating from 94th and Broadway to Columbia University. Is there a safe route?">
+                    94th &amp; Broadway → Columbia
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <section id="chat">
+                <div id="messages">
+                    <div class="welcome">
+                        Tell me where you want to skate and how confident you are, e.g. <strong>"nervous beginner"</strong>
+                        or <strong>"comfortable on hills"</strong>. I'll find routes, check every climb and descent, and
+                        show them on the map: <strong>green</strong> is flat, <strong>yellow</strong> is a gentle slope,
+                        <strong>red</strong> is a descent steeper than your limit, <strong>purple</strong> a climb steeper
+                        than your limit. Plans take 20–40 seconds.
+                    </div>
+                </div>
+                <div id="input-area">
+                    <textarea id="user-input" rows="2" placeholder="Where do you want to skate?"></textarea>
+                    <button id="send-btn">Send</button>
+                    <button id="clear-btn" title="Start a new conversation">New</button>
+                </div>
+            </section>
+
+            <section id="map-wrap">
+                <div id="map"></div>
+                <div id="map-empty">Routes appear here</div>
+                <details class="legend" id="legend" open>
+                    <summary>Legend</summary>
+                    <div class="title">Grade</div>
+                    <div class="row"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#16a34a" stroke-width="5" /></svg>flat (under 2%)</div>
+                    <div class="row"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#f59e0b" stroke-width="5" /></svg>gentle (2% to your limit)</div>
+                    <div class="row"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#dc2626" stroke-width="5" /></svg>downhill, over your limit</div>
+                    <div class="row"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#7c3aed" stroke-width="5" /></svg>uphill, over your limit</div>
+                    <div class="row"><svg width="26" height="14" viewBox="0 0 26 14"><path d="M13 13 L7 3 L13 6 L19 3 Z" fill="#1d2433" /></svg>arrow points down the slope</div>
+                    <div class="row"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#98a2b3" stroke-width="5" /></svg>no grade data</div>
+                    <div class="title">Bike lane</div>
+                    <div class="row"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#1d2433" stroke-width="6" /></svg>protected</div>
+                    <div class="row"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#1d2433" stroke-width="3" /></svg>painted or shared</div>
+                    <div class="row"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#1d2433" stroke-width="3" stroke-dasharray="4 3" /></svg>no bike lane</div>
+                </details>
+            </section>
+        </main>
+
+        <canvas id="sparkles"></canvas>
         <script>
+            // --- Sparkle trail: little stars in the route colors that drift and fade behind the mouse ---
+            (function sparkles() {
+                const canvas = document.getElementById("sparkles");
+                const toggle = document.getElementById("sparkle-toggle");
+                const ctx = canvas.getContext("2d");
+                const COLORS = ["#16a34a", "#f59e0b", "#7c3aed", "#2563eb", "#f472b6"];
+                const MAX = 120; // cap on sparkles alive at once
+                const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                let saved = null;
+                try {
+                    saved = localStorage.getItem("sparkles");
+                } catch {}
+                let on = !reducedMotion && saved !== "off";
+                let particles = [];
+                let running = false;
+                let last = { x: 0, y: 0 };
+
+                function resize() {
+                    const dpr = window.devicePixelRatio || 1;
+                    canvas.width = innerWidth * dpr;
+                    canvas.height = innerHeight * dpr;
+                    canvas.style.width = innerWidth + "px";
+                    canvas.style.height = innerHeight + "px";
+                    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                }
+
+                function star(x, y, r, rotation) {
+                    // A four-pointed sparkle.
+                    ctx.beginPath();
+                    for (let i = 0; i < 8; i++) {
+                        const radius = i % 2 === 0 ? r : r * 0.35;
+                        const a = rotation + (i * Math.PI) / 4;
+                        ctx.lineTo(x + Math.cos(a) * radius, y + Math.sin(a) * radius);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                }
+
+                function frame() {
+                    ctx.clearRect(0, 0, innerWidth, innerHeight);
+                    particles = particles.filter((p) => p.life > 0);
+                    for (const p of particles) {
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.vy += 0.04; // a little gravity
+                        p.rotation += p.spin;
+                        p.life -= 1;
+                        ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+                        ctx.fillStyle = p.color;
+                        star(p.x, p.y, p.size * (0.5 + 0.5 * (p.life / p.maxLife)), p.rotation);
+                    }
+                    ctx.globalAlpha = 1;
+                    if (particles.length) requestAnimationFrame(frame);
+                    else running = false; // idle when nothing is on screen
+                }
+
+                function burst(x, y, count) {
+                    for (let i = 0; i < count && particles.length < MAX; i++) {
+                        const life = 30 + Math.random() * 30;
+                        particles.push({
+                            x: x + (Math.random() - 0.5) * 6,
+                            y: y + (Math.random() - 0.5) * 6,
+                            vx: (Math.random() - 0.5) * 1.6,
+                            vy: (Math.random() - 0.8) * 1.6,
+                            size: 3 + Math.random() * 4,
+                            rotation: Math.random() * Math.PI,
+                            spin: (Math.random() - 0.5) * 0.2,
+                            color: COLORS[(Math.random() * COLORS.length) | 0],
+                            life,
+                            maxLife: life,
+                        });
+                    }
+                    if (!running) {
+                        running = true;
+                        requestAnimationFrame(frame);
+                    }
+                }
+
+                window.addEventListener("pointermove", (e) => {
+                    if (!on) return;
+                    // More sparkles the faster the mouse moves, like a skater kicking up glitter.
+                    const speed = Math.hypot(e.clientX - last.x, e.clientY - last.y);
+                    last = { x: e.clientX, y: e.clientY };
+                    burst(e.clientX, e.clientY, Math.min(4, 1 + speed / 25));
+                });
+                window.addEventListener("pointerdown", (e) => on && burst(e.clientX, e.clientY, 14));
+                window.addEventListener("resize", resize);
+                resize();
+
+                toggle.setAttribute("aria-pressed", String(on));
+                toggle.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    on = !on;
+                    toggle.setAttribute("aria-pressed", String(on));
+                    try {
+                        localStorage.setItem("sparkles", on ? "on" : "off"); // remembered per browser
+                    } catch {}
+                });
+            })();
+
             const messages = document.getElementById("messages");
             const userInput = document.getElementById("user-input");
             const sendBtn = document.getElementById("send-btn");
+            const clearBtn = document.getElementById("clear-btn");
+            const mapEmpty = document.getElementById("map-empty");
             let sessionId = null;
 
-            function addMessage(role, text, isLoading = false) {
-                const div = document.createElement("div");
-                div.className =
-                    "msg " +
-                    (role === "you" ? "user" : "assistant") +
-                    (isLoading ? " loading" : "");
-                div.innerHTML =
-                    '<div class="role">' +
-                    role +
-                    '</div><div class="content">' +
-                    text +
-                    "</div>";
+            // --- Map ---
+            const map = L.map("map", { zoomControl: true }).setView([40.7831, -73.9712], 13);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            }).addTo(map);
+            let routeLayer = null;
+            // On a phone the legend would cover the map; start it collapsed there.
+            if (window.matchMedia("(max-width: 800px)").matches) document.getElementById("legend").open = false;
+            const GRADE_COLORS = {
+                flat: "#16a34a",
+                moderate: "#f59e0b",
+                over_down: "#dc2626",
+                over_up: "#7c3aed",
+                artifact: "#cbd5e1", // likely a bridge or overpass reading, not a hill
+                nodata: "#98a2b3",
+            };
+            const GRADE_LABELS = {
+                over_down: "downhill, over your limit",
+                over_up: "uphill, over your limit",
+                artifact: "possible bridge/overpass reading, not a real hill",
+            };
+
+            // Compass bearing (degrees clockwise from north) from point a to b, both [lng, lat].
+            function bearing(a, b) {
+                const dx = (b[0] - a[0]) * Math.cos((a[1] * Math.PI) / 180);
+                const dy = b[1] - a[1];
+                return (Math.atan2(dx, dy) * 180) / Math.PI;
+            }
+
+            // An arrow at the middle of an over-limit stretch, pointing down the slope: the way you
+            // travel on a descent, against it on a climb.
+            function slopeArrow(feature) {
+                const c = feature.geometry.coordinates;
+                const k = Math.max(0, Math.floor(c.length / 2) - 1);
+                const travel = bearing(c[k], c[Math.min(k + 1, c.length - 1)]);
+                const downhill = feature.properties.grade_class === "over_down";
+                const angle = downhill ? travel : travel + 180;
+                const mid = c[Math.floor(c.length / 2)];
+                const color = GRADE_COLORS[feature.properties.grade_class];
+                return L.marker([mid[1], mid[0]], {
+                    interactive: false,
+                    icon: L.divIcon({
+                        className: "slope-arrow",
+                        iconSize: [22, 22],
+                        iconAnchor: [11, 11],
+                        html:
+                            '<svg width="22" height="22" viewBox="0 0 22 22" style="transform: rotate(' + (angle + 180) + 'deg)">' +
+                            '<circle cx="11" cy="11" r="10" fill="#fff" stroke="' + color + '" stroke-width="2"/>' +
+                            '<path d="M11 17 L6 7 L11 10 L16 7 Z" fill="' + color + '"/></svg>',
+                    }),
+                });
+            }
+            const FACILITY_LABELS = { protected: "protected lane", painted: "painted lane", shared: "shared lane", none: "no bike lane", unpaved: "unpaved" };
+
+            function styleFor(props) {
+                const protectedLane = props.bike_facility === "protected";
+                const noLane = props.bike_facility === "none" || props.bike_facility === "unpaved";
+                return {
+                    color: GRADE_COLORS[props.grade_class] || GRADE_COLORS.nodata,
+                    weight: protectedLane ? 7 : 4,
+                    opacity: 0.9,
+                    dashArray: noLane ? "6 6" : null,
+                    lineCap: "round",
+                };
+            }
+
+            async function showRoute(routeId) {
+                const res = await fetch("/routes/" + routeId);
+                if (!res.ok) {
+                    mapEmpty.textContent = "That route has expired; ask again to re-plan it.";
+                    mapEmpty.style.display = "block";
+                    return null;
+                }
+                const geojson = await res.json();
+                if (routeLayer) routeLayer.remove();
+                routeLayer = L.featureGroup();
+                L.geoJSON(geojson, {
+                    style: (f) => styleFor(f.properties),
+                    onEachFeature: (f, layer) => {
+                        const p = f.properties;
+                        const grade = p.max_grade_pct == null ? "no grade data" : "steepest " + p.max_grade_pct + "%";
+                        const label = GRADE_LABELS[p.grade_class] ? GRADE_LABELS[p.grade_class] + ": " : "";
+                        layer.bindTooltip(label + grade + " · " + (FACILITY_LABELS[p.bike_facility] || p.bike_facility), { sticky: true });
+                        if (p.grade_class === "over_down" || p.grade_class === "over_up") slopeArrow(f).addTo(routeLayer);
+                    },
+                }).addTo(routeLayer);
+                const stops = geojson.properties.stops;
+                const start = stops[0], end = stops[stops.length - 1];
+                const loop = Math.abs(start.lat - end.lat) < 1e-5 && Math.abs(start.lng - end.lng) < 1e-5;
+                L.circleMarker([start.lat, start.lng], { radius: 7, color: "#fff", weight: 2, fillColor: "#1d2433", fillOpacity: 1 })
+                    .bindTooltip(loop ? "Start / finish" : "Start: " + start.name).addTo(routeLayer);
+                if (!loop) {
+                    L.circleMarker([end.lat, end.lng], { radius: 7, color: "#1d2433", weight: 3, fillColor: "#fff", fillOpacity: 1 })
+                        .bindTooltip("Finish: " + end.name).addTo(routeLayer);
+                }
+                routeLayer.addTo(map);
+                map.fitBounds(routeLayer.getBounds(), { padding: [30, 30] });
+                mapEmpty.style.display = "none";
+                return geojson;
+            }
+
+            // --- Chat helpers ---
+            function el(tag, className, text) {
+                const node = document.createElement(tag);
+                if (className) node.className = className;
+                if (text != null) node.textContent = text;
+                return node;
+            }
+
+            function addMessage(role, text) {
+                const div = el("div", "msg " + role);
+                const content = el("div", "content");
+                if (role === "assistant") content.innerHTML = DOMPurify.sanitize(marked.parse(text));
+                else content.textContent = text;
+                div.appendChild(content);
                 messages.appendChild(div);
                 messages.scrollTop = messages.scrollHeight;
                 return div;
             }
 
-            async function send() {
-                const text = userInput.value.trim();
-                if (!text) return;
+            function parseResult(result) {
+                if (typeof result !== "string") return result;
+                try {
+                    return JSON.parse(result);
+                } catch {
+                    return result;
+                }
+            }
 
+            // Routes planned in this reply, as chips for the map. The agent often tries several before
+            // settling, so show the ones that fit the limits first, latest first, without duplicates.
+            function plannedRoutes(toolCalls) {
+                const routes = [];
+                for (const call of toolCalls) {
+                    if (call.name !== "plan_skate_route") continue;
+                    const result = parseResult(call.result);
+                    for (const r of (result && result.routes) || []) routes.push(r);
+                }
+                routes.reverse();
+                routes.sort((a, b) => (b.meets_limits === true) - (a.meets_limits === true));
+                const seen = new Set();
+                return routes
+                    .filter((r) => {
+                        const key = r.description + r.miles;
+                        return !seen.has(key) && seen.add(key);
+                    })
+                    .slice(0, 6);
+            }
+
+            function verdictBadge(route) {
+                const v = route.meets_limits === true ? "yes" : route.meets_limits === false ? "no" : "unknown";
+                const text = v === "yes" ? "fits limits" : v === "no" ? "over limits" : "grades unknown";
+                return '<span class="badge ' + v + '">' + text + "</span>";
+            }
+
+            function renderRoutes(container, routes) {
+                if (!routes.length) return;
+                const row = el("div", "routes");
+                const cueBox = el("div");
+                const chips = routes.map((r) => {
+                    const chip = el("button", "chip");
+                    const prot = Math.round(100 * ((r.bike_facilities || {}).protected || 0));
+                    chip.innerHTML =
+                        "<strong></strong>" + verdictBadge(r) + "<br>" + r.miles + " mi · " + r.minutes + " min · " + prot + "% protected";
+                    chip.querySelector("strong").textContent = r.description || "Route";
+                    chip.addEventListener("click", () => select(chip, r));
+                    row.appendChild(chip);
+                    return chip;
+                });
+                async function select(chip, r) {
+                    chips.forEach((c) => c.classList.toggle("active", c === chip));
+                    const geojson = await showRoute(r.route_id);
+                    cueBox.replaceChildren();
+                    if (!geojson) return;
+                    const spots = renderSteepSpots(geojson.properties.steep_spots, geojson.properties.limits);
+                    if (spots) cueBox.appendChild(spots);
+                    cueBox.appendChild(renderCueSheet(geojson.properties.cue_sheet));
+                }
+                container.appendChild(row);
+                container.appendChild(cueBox);
+                select(chips[0], routes[0]); // show the first (best) route right away
+            }
+
+            // The stretches over the rider's limits, each saying which way it slopes. Click to zoom.
+            function renderSteepSpots(spots, limits) {
+                if (!spots || !spots.length) return null;
+                const box = el("div", "spots");
+                box.appendChild(
+                    el("div", "spots-title", "Steep spots (limits: " + limits.max_uphill_pct + "% up, " + limits.max_downhill_pct + "% down)"),
+                );
+                for (const s of spots) {
+                    const down = s.direction === "downhill";
+                    const item = el("button", "spot " + (down ? "down" : "up"));
+                    const change = down ? "drops " + s.elevation_change_m + " m" : "climbs " + s.elevation_change_m + " m";
+                    item.innerHTML = '<span class="icon">' + (down ? "⬇" : "⬆") + "</span><span></span>";
+                    item.lastChild.textContent =
+                        (down ? "Downhill " : "Uphill ") + s.max_grade_pct + "% · " + s.length_m + " m · " + change +
+                        " · " + s.street + " (mile " + s.at_mile + ")" +
+                        (s.walkable_climb ? " · short enough to walk" : "") +
+                        (s.bike_facility === "none" ? " · no bike lane" : "");
+                    item.addEventListener("click", () =>
+                        map.fitBounds(L.latLngBounds([s.start, s.end]).pad(1.5), { maxZoom: 18 }),
+                    );
+                    box.appendChild(item);
+                }
+                return box;
+            }
+
+            function renderCueSheet(steps) {
+                const details = el("details", "cue");
+                details.appendChild(el("summary", null, "Turn-by-turn (" + steps.length + (steps.length === 1 ? " step)" : " steps)")));
+                const list = el("ol");
+                for (const s of steps) {
+                    const li = el("li", null, s.instruction + " ");
+                    li.appendChild(el("span", "mi", s.miles + " mi"));
+                    list.appendChild(li);
+                }
+                details.appendChild(list);
+                return details;
+            }
+
+            // One line per call, readable while the agent works; full args and result inside.
+            function describeCall(name, args) {
+                if (name === "plan_skate_route") {
+                    const via = (args.waypoints || []).length ? " via " + args.waypoints.length + " waypoint(s)" : "";
+                    return args.origin === args.destination ? "loop from " + args.origin + via : args.origin + " → " + args.destination + via;
+                }
+                if (name === "find_place") return args.query;
+                if (name === "find_skate_loops") return [args.level, args.target_miles && args.target_miles + " mi", args.near].filter(Boolean).join(", ");
+                if (name === "get_grade_details") return "route " + args.route_id;
+                return JSON.stringify(args).slice(0, 80);
+            }
+
+            function describeResult(name, result) {
+                if (result && result.error) return "⚠ " + result.error;
+                if (name === "plan_skate_route" && result.routes) {
+                    const best = result.routes[0];
+                    return result.routes.length + " route(s); best " + best.miles + " mi, " + (best.meets_limits === true ? "fits limits" : "over limits");
+                }
+                if (name === "find_skate_loops" && result.loops) return result.loops.length + " loop(s)";
+                if (name === "find_place" && result.candidates) return result.candidates[0].name;
+                if (name === "get_grade_details" && result.stretches) return result.stretches.length + " steep stretch(es)";
+                return "done";
+            }
+
+            // The tool-call panel: open while the agent works, collapsed once the reply arrives.
+            function toolPanel(container) {
+                const details = el("details", "tools");
+                details.open = true;
+                const summary = el("summary", null, "🔧 Working…");
+                details.appendChild(summary);
+                container.appendChild(details);
+                const rows = {};
+                let count = 0;
+
+                function row(id, name, args) {
+                    const box = el("div", "tool running");
+                    const head = el("div", "head");
+                    head.appendChild(el("span", "status", "⏳"));
+                    head.appendChild(el("span", "name", name));
+                    head.appendChild(el("span", "what", describeCall(name, args)));
+                    box.appendChild(head);
+                    const outcome = el("div", "outcome", "running…");
+                    box.appendChild(outcome);
+                    const more = el("details", "raw");
+                    more.appendChild(el("summary", null, "args and result"));
+                    more.appendChild(el("div", "label", "args"));
+                    more.appendChild(el("pre", null, JSON.stringify(args, null, 2)));
+                    box.appendChild(more);
+                    details.appendChild(box);
+                    rows[id] = { box, outcome, more, head };
+                    count += 1;
+                    summary.textContent = "🔧 Working… " + count + " tool call" + (count > 1 ? "s" : "");
+                    messages.scrollTop = messages.scrollHeight;
+                }
+
+                return {
+                    start(e) {
+                        row(e.id, e.name, e.args);
+                    },
+                    end(e) {
+                        if (!rows[e.id]) row(e.id, e.name, e.args);
+                        const r = rows[e.id];
+                        const result = parseResult(e.result);
+                        r.box.classList.remove("running");
+                        r.head.querySelector(".status").textContent = result && result.error ? "⚠" : "✓";
+                        r.outcome.textContent = describeResult(e.name, result);
+                        r.more.appendChild(el("div", "label", "result"));
+                        r.more.appendChild(el("pre", null, typeof result === "string" ? result : JSON.stringify(result, null, 2)));
+                    },
+                    finish() {
+                        if (!count) return details.remove();
+                        summary.textContent = "🔧 " + count + " tool call" + (count > 1 ? "s" : "");
+                        details.open = false;
+                        container.appendChild(details); // keep the panel below the reply and routes
+                    },
+                };
+            }
+
+            // Read newline-delimited JSON events from /chat/stream as they arrive.
+            async function* streamEvents(response) {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    let newline;
+                    while ((newline = buffer.indexOf("\n")) >= 0) {
+                        const line = buffer.slice(0, newline).trim();
+                        buffer = buffer.slice(newline + 1);
+                        if (line) yield JSON.parse(line);
+                    }
+                }
+            }
+
+            // --- Send ---
+            async function send(text) {
+                text = (text ?? userInput.value).trim();
+                if (!text) return;
                 userInput.value = "";
                 sendBtn.disabled = true;
-                addMessage("you", text);
-                const loading = addMessage("assistant", "Thinking...", true);
+                document.querySelector(".welcome")?.remove();
+                addMessage("user", text);
+
+                const reply = addMessage("assistant", "");
+                reply.classList.add("loading");
+                const content = reply.querySelector(".content");
+                const started = Date.now();
+                const tick = () => (content.textContent = "Planning and grading routes… " + Math.round((Date.now() - started) / 1000) + "s");
+                tick();
+                const timer = setInterval(tick, 1000);
+                const panel = toolPanel(reply);
 
                 try {
-                    const res = await fetch("/chat", {
+                    const res = await fetch("/chat/stream", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            message: text,
-                            session_id: sessionId,
-                        }),
+                        body: JSON.stringify({ message: text, session_id: sessionId }),
                     });
-                    const data = await res.json();
-                    sessionId = data.session_id;
-
-                    // Show each tool the harness ran, above the assistant's answer
-                    for (const call of data.tool_calls || []) {
-                        const div = document.createElement("div");
-                        div.className = "tool";
-                        const label = document.createElement("span");
-                        label.className = "label";
-                        label.textContent = "tool call  ";
-                        div.appendChild(label);
-                        div.appendChild(
-                            document.createTextNode(
-                                call.name + "(" + JSON.stringify(call.args) + ")\n→ " + call.result,
-                            ),
-                        );
-                        messages.insertBefore(div, loading);
+                    for await (const event of streamEvents(res)) {
+                        if (event.type === "tool_start") panel.start(event);
+                        else if (event.type === "tool_end") panel.end(event);
+                        else if (event.type === "done") {
+                            sessionId = event.session_id;
+                            clearInterval(timer);
+                            reply.classList.remove("loading");
+                            content.innerHTML = DOMPurify.sanitize(marked.parse(event.response || ""));
+                            renderRoutes(reply, plannedRoutes(event.tool_calls || []));
+                            panel.finish();
+                        }
                     }
-                    loading.querySelector(".content").textContent =
-                        data.response;
-                    loading.classList.remove("loading");
                 } catch (e) {
-                    loading.querySelector(".content").textContent =
-                        "Error: " + e.message;
-                    loading.classList.remove("loading");
+                    reply.classList.remove("loading");
+                    content.textContent = "Error: " + e.message;
                 }
+                clearInterval(timer);
                 sendBtn.disabled = false;
+                messages.scrollTop = messages.scrollHeight;
                 userInput.focus();
             }
 
-            sendBtn.addEventListener("click", send);
-            userInput.addEventListener("keydown", function (e) {
-                if (e.key === "Enter") send();
+            sendBtn.addEventListener("click", () => send());
+            userInput.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                }
+            });
+            document.querySelectorAll(".examples button").forEach((b) => b.addEventListener("click", () => send(b.dataset.prompt)));
+            clearBtn.addEventListener("click", async () => {
+                if (sessionId) await fetch("/clear?session_id=" + encodeURIComponent(sessionId), { method: "POST" });
+                sessionId = null;
+                messages.replaceChildren();
+                if (routeLayer) routeLayer.remove();
+                mapEmpty.textContent = "Routes appear here";
+                mapEmpty.style.display = "block";
+                addMessage("assistant", "New conversation. Where do you want to skate?");
             });
             userInput.focus();
         </script>

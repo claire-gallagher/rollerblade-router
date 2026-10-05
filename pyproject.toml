@@ -1,7 +1,7 @@
 [project]
-name = "agents-sdk-web"
+name = "skate-router"
 version = "0.1.0"
-description = "gemini-web-tool-calling rebuilt with the OpenAI Agents SDK: FastAPI + Agents SDK + LiteLLM + Gemini"
+description = "Grade-aware rollerblading route agent for Manhattan: FastAPI + OpenAI Agents SDK + Gemini + Stadia Maps (Valhalla) + NYC LiDAR"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.109.0",
@@ -9,4 +9,18 @@ dependencies = [
     "openai-agents[litellm]>=0.22",
     "google-cloud-aiplatform>=1.40.0",
     "requests>=2.31",
+    "polyline>=2.0.4",
+    "python-dotenv>=1.2.3",
+    "rasterio>=1.4.4",
+    "pyproj>=3.7.1",
+    "numpy>=2.2.6",
+    "shapely>=2.1.2",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

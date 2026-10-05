@@ -9,7 +9,10 @@ __pycache__/
 .env
 
 # Session history the app writes at runtime
-conversations.db
+conversations.db*
 
 # macOS
 .DS_Store
+
+# LiDAR raster built by scripts/prep_lidar.py (too big for git)
+data/
