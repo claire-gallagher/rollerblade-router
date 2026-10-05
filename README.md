@@ -14,6 +14,8 @@ Skate Router works by starting with an route from the open-source navigation API
 
 Built on FastAPI, the OpenAI Agents SDK and Gemini (via LiteLLM on Vertex AI), with a Leaflet map frontend.
 
+**Live app:** https://rollerblade-router-git-2kjr74cbla-ew.a.run.app (sign in with a Columbia account)
+
 ## Data sources
 
 | Need | Source | Notes |
