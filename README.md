@@ -4,7 +4,7 @@ As I've learned to inline skate in the last year, I get bored of skating the sam
 
 This tool-calling agent plans **rollerblading routes in Manhattan**: steep hills (especially downhills) are avoided and protected bike lanes are prioritized.
 
-Skate Router works by starting with an route from the open-source navigation API, and then fine tunes the result for inline skating. 
+Skate Router works by starting with a route from the open-source navigation API, and then fine tunes the result for inline skating. 
 
 - The proposed routes are split into 5m segments and graded with the city's most recent LiDAR elevation data, and checked against NYC DOT's bike route segments.
 
@@ -45,7 +45,7 @@ Built on FastAPI, the OpenAI Agents SDK and Gemini (via LiteLLM on Vertex AI), w
 | intermediate | 6% | 5% |
 | advanced | 10% | 8% |
 
-These are hyperparemeters that can be adjusted in `grade.py`
+These are hyperparameters that can be adjusted in `grade.py`
 
 ## Running Locally
 
@@ -73,7 +73,7 @@ Continuous deployment from GitHub to Cloud Run (Developer Connect, buildpack, IA
 
 ## Limitations and Next Steps
 
-I was surprised that to get the resolution needed (sub meter) for elevation data, the [latest update for Manhattan was 2017.](https://data.gis.ny.gov/maps/nys-latest-lidar-collections/explore?location=40.845985%2C-73.999717%2C9) There has surely been lots of changes to the streetscape in the last decade, so these routes still have an asterisk: known your skating ability and never be afraid to scout the route out on a bike or on foot first!
+I was surprised that to get the resolution needed (sub meter) for elevation data, the [latest update for Manhattan was 2017.](https://data.gis.ny.gov/maps/nys-latest-lidar-collections/explore?location=40.845985%2C-73.999717%2C9) There has surely been lots of changes to the streetscape in the last decade, so these routes still have an asterisk: know your skating ability and never be afraid to scout the route out on a bike or on foot first!
 
 I wish to revisit this project later in the semester to build out more functions other than skating, namely personalized, transparent bike routing across the NYC metro area. This general idea was inspired by [BikeButler](https://dl.acm.org/doi/10.1145/3772318.3791292), a pilot research project from the University of Washington.
 
